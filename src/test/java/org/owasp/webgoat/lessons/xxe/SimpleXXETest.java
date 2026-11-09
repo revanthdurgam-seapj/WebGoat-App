@@ -26,11 +26,15 @@ import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.owasp.webgoat.container.plugins.LessonTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -43,6 +47,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ExtendWith(SpringExtension.class)
 public class SimpleXXETest extends LessonTest {
 
+    @TempDir
+    Path tempDir;
+
     @BeforeEach
     public void setup() {
         when(webSession.getCurrentLesson()).thenReturn(new XXE());
@@ -51,9 +58,11 @@ public class SimpleXXETest extends LessonTest {
 
     @Test
     public void workingAttack() throws Exception {
+        // Use a controlled listing instead of the current drive's root on Windows.
+        var rootListing = Files.writeString(tempDir.resolve("root-listing.txt"), "usr\nWindows\n");
         //Call with XXE injection
         mockMvc.perform(MockMvcRequestBuilders.post("/xxe/simple")
-                .content("<?xml version=\"1.0\" standalone=\"yes\" ?><!DOCTYPE user [<!ENTITY root SYSTEM \"file:///\"> ]><comment><text>&root;</text></comment>"))
+                .content("<?xml version=\"1.0\" standalone=\"yes\" ?><!DOCTYPE user [<!ENTITY root SYSTEM \"" + rootListing.toUri() + "\"> ]><comment><text>&root;</text></comment>"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.feedback", CoreMatchers.is(messages.getMessage("assignment.solved"))));
     }
